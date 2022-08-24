@@ -1,0 +1,305 @@
+---
+title: "Cyclistic Case Study"
+date: "2022-08-24"
+output: html_document
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Summary
+Cyclistic, a successful bike-sharing company launched in 2016 in Chicago, has a fleet of over 5,800 bikes that can be unlocked from one station and returned to any other station in the system at anytime. The fleet consists of traditional bikes, reclining bikes, hand tricycles and cargo bikes. The majority of riders opt for traditional bikes (8% of riders use the assistive options). Cyclistic users are more likely to ride for leisure, though approximately 30% use them to commute to work each day.  
+
+Until now, the company's marketing strategy has relied on building general awareness and appealing to broad consumer segments. The company offers different pricing plans, including single ride passes, full day passes, and annual memberships. Customers are classified as casual riders, those purchasing single ride or full day passes, and annual members, those who purchase annual memberships. Cyclistic's finance analysts have determined that annual members are more profitable than casual riders. The company believes maximizing the number of annual members will be key to future growth and that there is opportunity to convert causal riders into members. Cyclistic will look to design marketing strategies aimed at converting casual riders into annual members. In order to design a strategy, the company seeks to better understand a) how annual members and casual riders use Cyclistic bikes differently, b) why casual riders would buy Cyclistic annual memberships, and c) how Cyclistic can use digital media to influence casual riders to become members.  
+
+**The scope of this report will be focused on the first question, how do annual members and casual riders use Cyclistic bikes differently?**
+
+### Data Source
+Data for analysis includes six months of Cyclistic trip data through July 2022, which can be found [here](https://divvy-tripdata.s3.amazonaws.com/index.html). Permission for use of data can be found [here](https://www.divvybikes.com/data-license-agreement). 
+
+As internally sourced data from Cyclistic, the data is deemed credible and is current. While a full 12 months of data was preferred for analysis, data processing capacity was limited and attempts at using 12 months of data was not feasible due to system constraints. The six months of data from February - July 2022 still aims to capture seasonality with a duration covering winter - summer. 
+
+The data set includes ride observation data as follows: ride ID, bike type, start date/time, end date/time, start station name, start station ID, end station name, end station ID, start latitude, start longitude, end latitude, end longitude, and member type. Each month of data consistently includes all the same variables. Total observations aggregate to over 2.99 mm for the six month period. 
+
+Review of the data shows there is missing start station name and id and end station name and id for some observations in each month of data, although the observations include start and end latitude and longitude data. Approximately 14%-15% of observations are missing start or end station name from aggregate six month data. While an attempt was made to compare the number of distinct latitude and longitude pairs to the distinct station names, the disparity was significantly large, making pairing of station names to latitude-longitude coordinates difficult to determine in order to confidently fill the missing data accurately. Given the specificity of the latitude and longitude data and the significant difference in identified stations and latitude-longitude pairs, the data may indicate multiple latitude-longitude pairs align to a single station in the network if the docking stations are large enough, though that is speculative. Analysis for this project includes these rides except where analysis relates to start and end station data. 
+
+Due to data privacy issues, riders' personally identifiable information is not disclosed and brings about limitations, such as inability to connect pass purchases to credit card numbers to determine if a casual rider has purchased multiple single passes or if a rider lives in the company's service area. Thus, the data does not reveal patterns or frequency of use, if any, of individual casual riders.
+
+### Data Processing
+Data processing began in Excel with a review of the six months of data files from February - July 2022 and the variables included in the data which was consistent across the six months. 
+
+Review of the data showed 14%-15% of the rides  missing start station or end station data.  In order to further study this issue and to determine if a match between station names and latitude-longitude coordinates could be made to fill in the missing data, analysis was completed on a single month of data. A concatenate function was used to create latitude-longitude coordinates for rides in the data set and uploaded to Big Query. A simple COUNT DISTINCT function was used to determine the number of latitude-longitude coordinates, start station names and end station names. There were significantly more distinct latitude-longitude coordinates than there were station names, indicating it would be difficult to try to accurately assign station names to latitude-longitude coordinates for observations that were missing this data and attempts to do this were abandoned.
+
+To prepare data for further analysis in RStudio, the monthly files were further processed in excel. The concatenated data in the one month of data used for analysis noted above was deleted. Data related to latitude and longitude and start station ID and end station ID were deleted;data for day of week (1=Sunday to 7=Saturday) and month (1-12) were added. All files included the same remaining columns of data in the same format to be further processed in RStudio.
+
+*Data processing in RStudio*
+
+Install packages that may be used for cleaning and analysis if not already installed
+
+```{r eval=FALSE}
+install.packages("tidyverse")
+```
+
+Call associated libraries
+```{r eval=TRUE}
+library(tidyverse)
+```
+
+Read/import data files
+```{r eval=TRUE}
+c202202 <- read_csv("C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/Excel Files/c202202.csv")
+c202203 <- read_csv("C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/Excel Files/c202203.csv")
+c202204 <- read_csv("C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/Excel Files/c202204.csv")
+c202205 <- read_csv("C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/Excel Files/c202205.csv")
+c202206 <- read_csv("C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/Excel Files/c202206.csv")
+c202207 <- read_csv("C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/Excel Files/c202207.csv")
+```
+Review imported data to see columns and data types
+```{r eval=TRUE}
+glimpse(c202202)
+glimpse(c202203)
+glimpse(c202204)
+glimpse(c202205)
+glimpse(c202206)
+glimpse(c202207)
+```
+
+Combine monthly data into one data frame
+```{r eval=TRUE}
+t6202207 <- rbind(c202202, c202203, c202204, c202205, c202206, c202207)
+```
+
+Review consolidated data
+```{r eval=TRUE}
+glimpse(t6202207)
+```
+
+From reviewing the data, start and end date and time is noted as being character data type and not in the correct data type for R calculations, so convert data type and review data to check change in data type
+
+```{r eval=TRUE}
+t6202207$started_at = strptime(t6202207$started_at, format = "%m/%d/%Y %H:%M")
+t6202207$ended_at = strptime(t6202207$ended_at, format = "%m/%d/%Y %H:%M")
+```
+
+```{r eval=TRUE}
+glimpse(t6202207)
+```
+
+Now that start and end time data type is corrected, add trip duration to data frame and review new column of data added
+```{r eval=TRUE}
+t6202207 <- mutate(t6202207, tripduration = difftime(ended_at, started_at, units = "mins"))
+```
+
+```{r eval=TRUE}
+glimpse(t6202207)
+```
+
+Check to make sure all trips are allocated to casual or member user classifications correctly
+```{r eval=TRUE}
+summarize(t6202207, tot_trips = n()) ## total trips
+
+t6202207 %>% 
+  filter(member_casual == "casual" | member_casual == "member") %>% 
+  summarize(total = n()) ##total trips allocated to member or casual user type should equal total trips
+```
+
+Check to make sure all trips are allocated to February (2) through July (7)
+```{r eval=TRUE}
+t6202207 %>% 
+  filter(month >=2 & month <= 7) %>% 
+  summarize(total = n()) ##total trips classified between 2-7 should equal total trips
+```
+
+Check trip durations to see if values make sense (none < 0)
+```{r eval=TRUE}
+t6202207 %>% 
+  filter(tripduration < 0) %>% 
+  summarize(total_invalid = n()) ##total trips with duration <0 should be 0
+```
+
+Since some trip durations seem to be <0 and invalid, exclude them from the data set to be analyzed (which will reduce the data set by 28 trips) and review results
+```{r eval=TRUE}
+t6202207 <- t6202207 %>%
+  filter(tripduration >= 0) 
+```
+
+```{r eval=TRUE}
+glimpse(t6202207)
+```
+
+Change month variables from 1-12 to Jan-Dec and review new data frame
+```{r eval=TRUE}
+t6202207 <- mutate(t6202207, month = month.abb[as.numeric(month)])
+```
+
+```{r eval=TRUE}
+glimpse(t6202207)
+```
+
+Change day of week variables from 1-7 to Sun-Sat and review new data frame
+```{r eval=TRUE}
+t6202207$day_of_week <- factor(t6202207$day_of_week, labels = c("Sun", "Mon","Tue","Wed", "Thu", "Fri", "Sat"), levels = c(1,2,3,4,5,6,7))
+```
+
+```{r eval=TRUE}
+glimpse(t6202207)
+```
+
+```{r eval=FALSE}
+write.csv(t6202207, file ="C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/t6202207v4.csv")
+```
+
+### Analysis
+Organize data by user type
+
+```{r eval=TRUE}
+cas_rides <- t6202207 %>% 
+  filter(member_casual == "casual")
+
+member_rides <- t6202207 %>%
+  filter(member_casual == "member")
+```
+
+*Summarize data by user type for comparison*  
+
+Total trips and average trip length
+```{r eval=TRUE}
+summarize(cas_rides, total_trips = n(), avg_trip_len = mean(tripduration))
+summarize(member_rides, total_trips = n(), avg_trip_len = mean(tripduration))
+```
+
+Trips by month
+```{r eval=TRUE}
+cas_rides_monthly <- cas_rides %>% 
+  group_by(month) %>% 
+  summarize(total = n()) %>% 
+  arrange(desc(total))
+
+member_rides_monthly <- member_rides %>% 
+  group_by(month) %>% 
+  summarize(total = n()) %>% 
+  arrange(desc(total))
+```
+
+```{r eval=TRUE}
+glimpse(cas_rides_monthly)
+glimpse(member_rides_monthly)
+```
+
+```{r eval=FALSE}
+write.csv(cas_rides_monthly, file ="C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/cas_rides_monthlyv4.csv")
+write.csv(member_rides_monthly, file ="C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/memb_rides_monthlyv4.csv")
+```
+
+Trips by day and average trip length
+```{r eval=TRUE}
+cas_rides_day_avg_time <- cas_rides %>% 
+  group_by(day_of_week) %>% 
+  summarize(total = n(), avg_time = mean(tripduration)) %>% 
+  arrange(day_of_week)
+
+member_rides_day_avg_time <- member_rides %>% 
+  group_by(day_of_week) %>% 
+  summarize(total = n(), avg_time = mean(tripduration)) %>% 
+  arrange(day_of_week)
+```
+
+```{r eval=TRUE}
+glimpse(cas_rides_day_avg_time)
+glimpse(member_rides_day_avg_time)
+```
+
+```{r eval=FALSE}
+write.csv(cas_rides_day_avg_time, file ="C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/cas_days_wk_durationv4.csv")
+write.csv(member_rides_day_avg_time, file ="C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/memb_days_wk_durationv4.csv")
+```
+
+Start Station Popularity
+```{r eval = TRUE}
+top_cas_start_stn <- cas_rides %>% 
+  filter(!is.na(start_station_name)) %>% ##exclude rides with no start station name
+  group_by(start_station_name) %>% 
+  summarize(total = n()) %>% 
+  arrange(desc(total))
+
+top_memb_start_stn <- member_rides %>% 
+  filter(!is.na(start_station_name)) %>% ##exclude rides with no start station name
+  group_by(start_station_name) %>% 
+  summarize(total = n()) %>% 
+  arrange(desc(total))
+```
+
+```{r eval=TRUE}
+glimpse(top_cas_start_stn)
+glimpse(top_memb_start_stn)
+```
+
+```{r eval=FALSE}
+write.csv(top_cas_start_stn, file ="C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/cas_ride_top_start_stationv4.csv")
+write.csv(top_memb_start_stn, file ="C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/memb_ride_top_start_stationv4.csv")
+```
+
+End Station Popularity
+```{r eval=TRUE}
+top_cas_end_stn <- cas_rides %>% 
+  filter(!is.na(end_station_name)) %>% ##exclude rides with no end station name
+  group_by(end_station_name) %>% 
+  summarize(total = n()) %>% 
+  arrange(desc(total))
+
+top_memb_end_stn <- member_rides %>% 
+  filter(!is.na(end_station_name)) %>% ##exclude rides with no end station name
+  group_by(end_station_name) %>% 
+  summarize(total = n()) %>% 
+  arrange(desc(total))
+```
+
+```{r eval=TRUE}
+glimpse(top_cas_start_stn)
+glimpse(top_memb_start_stn)
+```
+
+```{r eval=FALSE}
+write.csv(top_cas_end_stn, file ="C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/cas_ride_top_end_stationv4.csv")
+write.csv(top_memb_end_stn, file ="C:/Users/Steph/Desktop/Google Certificate/Bike Share Case Study/Divvy Tripdata/memb_ride_top_end_stationv4.csv")
+```
+
+**Trip Composition**  
+Casual user trips account for a large portion of total trips  
+![](C:\Users\Steph\Desktop\Google Certificate\Bike Share Case Study\T_Ride_Composition.png)
+
+**Seasonality**  
+Bike usage is significantly higher in the Summer than Winter  
+![](C:\Users\Steph\Desktop\Google Certificate\Bike Share Case Study\T_Monthly_Trips.png)
+
+**Average Trip Duration**  
+Average trip duration for casual user trips is more than double that of member trips  
+![](C:\Users\Steph\Desktop\Google Certificate\Bike Share Case Study\T_Avg_Trip_Duration.png)
+
+**Daily Average Trip Duration**  
+Average trip duration for members is shorter than casual users on all days  
+![](C:\Users\Steph\Desktop\Google Certificate\Bike Share Case Study\T_Daily_Trip_Duration.png)
+
+**Daily Trips**  
+Casual users take more trips on the weekend relative to members  
+![](C:\Users\Steph\Desktop\Google Certificate\Bike Share Case Study\T_Daily_Trips.png)
+
+**Top Start Stations**  
+Start station popularity differs between casual users and members with three stations in the top ten overlapping   
+![](C:\Users\Steph\Desktop\Google Certificate\Bike Share Case Study\Start_station_popularity.png)
+
+**Top End Stations**  
+End station popularity differs between casual users and members with two stations in the top ten overlapping    
+![](C:\Users\Steph\Desktop\Google Certificate\Bike Share Case Study\End_station_popularity.png)
+
+### Conclusions  
+Bike sharing is a seasonal business with significantly more trips taken in the summer than winter, regardless of user type. Casual users are an important segment of Cyclistic's user base, contributing 43% of total rides. There are differences in the usage patterns of casual users and members, with casual users taking longer trips on average and having higher weekend usage relative to members. Data also show differences in the top start and end stations for casual users and members.
+
+Based on current analysis, broad recommendations for action include:  
+1) marketing during the summer or warmer months when usage is high and users are more likely to think they will use the service more frequently, making membership more attractive    
+2) targeting casual users who use the service on weekdays and for trip durations more similar to members (i.e. relatively shorter average trip durations)  
+3) targeting casual users who are using start and end stations that are popular among member users, as this may indicate the stations are used for routine, repeated activity, such as commuting for work  
+
+Limitations to the data however means additional information should be considered before action should be taken. Trends seen in the data suggest further research should be carried out, including gathering data at the user level and surveying users to better understand frequency of use, use case and motivations for use. Lack of individual user data limits the ability to specifically target users that may be more likely to convert to members. Additional research on station information, i.e. commercial, residential, population density, etc. may also be conducted to better understand popularity of stations and potential to target users of specific stations or stations that meet similar criteria that could indicate users that are good candidates for membership. 
